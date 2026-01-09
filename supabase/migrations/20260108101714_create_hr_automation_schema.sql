@@ -1,4 +1,3 @@
-/*
   # HR Automation Platform Database Schema
 
   1. New Tables
@@ -42,12 +41,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   user_id uuid REFERENCES auth.users(id) NOT NULL,
   title text NOT NULL,
   description text DEFAULT '',
-  department text DEFAULT '',
-  location text DEFAULT '',
-  employment_type text DEFAULT 'full-time',
-  salary_range text DEFAULT '',
   banner_image_url text,
-  status text DEFAULT 'draft',
   posted_to_linkedin boolean DEFAULT false,
   posted_to_instagram boolean DEFAULT false,
   created_at timestamptz DEFAULT now(),
@@ -77,51 +71,45 @@ CREATE POLICY "Users can delete own jobs"
   TO authenticated
   USING (auth.uid() = user_id);
 
--- Candidates table
-CREATE TABLE IF NOT EXISTS candidates (
+-- Applicants table (mirrors legacy intake)
+CREATE TABLE IF NOT EXISTS applicants (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_id uuid REFERENCES jobs(id) ON DELETE CASCADE NOT NULL,
-  user_id uuid REFERENCES auth.users(id) NOT NULL,
-  name text NOT NULL,
+  full_name text NOT NULL,
+  phone_number varchar(20),
   email text NOT NULL,
-  phone text DEFAULT '',
-  resume_url text,
-  cover_letter text DEFAULT '',
-  status text DEFAULT 'applied',
-  stage text DEFAULT 'applied',
-  score integer DEFAULT 0,
-  ai_screening_notes text DEFAULT '',
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  application_message text,
+  resume_drive_url text,
+  resume_drive_file_id text,
+  resume_filename text,
+  subject text,
+  created_at timestamptz DEFAULT now()
 );
 
-ALTER TABLE candidates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE applicants ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own candidates"
-  ON candidates FOR SELECT
+CREATE POLICY "Authenticated users can view applicants"
+  ON applicants FOR SELECT
   TO authenticated
-  USING (auth.uid() = user_id);
+  USING (true);
 
-CREATE POLICY "Users can insert own candidates"
-  ON candidates FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Service roles can manage applicants"
+  ON applicants FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
 
-CREATE POLICY "Users can update own candidates"
-  ON candidates FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+INSERT INTO applicants (full_name, phone_number, email, application_message, resume_drive_url, resume_filename, subject)
+VALUES
+  ('Ayesha Khan', '+92 300 1234567', 'ayesha.khan@example.com', 'Excited to apply for the HR Manager role.', 'https://drive.google.com/file/d/ayesha-resume', 'Ayesha_Khan_Resume.pdf', 'HR Manager Application'),
+  ('Bilal Ahmed', '+92 321 7654321', 'bilal.ahmed@example.com', 'Attaching my resume for the AI Recruiter position.', 'https://drive.google.com/file/d/bilal-resume', 'Bilal_Ahmed_Resume.pdf', 'AI Recruiter Application'),
+  ('Sana Malik', '+92 333 1112233', 'sana.malik@example.com', 'Looking forward to discussing the Talent Lead opportunity.', 'https://drive.google.com/file/d/sana-resume', 'Sana_Malik_Resume.pdf', 'Talent Lead Application')
+ON CONFLICT DO NOTHING;
 
-CREATE POLICY "Users can delete own candidates"
-  ON candidates FOR DELETE
-  TO authenticated
-  USING (auth.uid() = user_id);
 
 -- Interviews table
 CREATE TABLE IF NOT EXISTS interviews (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  candidate_id uuid REFERENCES candidates(id) ON DELETE CASCADE NOT NULL,
+  applicant_id uuid REFERENCES applicants(id) ON DELETE CASCADE NOT NULL,
   user_id uuid REFERENCES auth.users(id) NOT NULL,
   scheduled_at timestamptz,
   status text DEFAULT 'pending',
@@ -159,18 +147,21 @@ CREATE POLICY "Users can delete own interviews"
 CREATE TABLE IF NOT EXISTS employees (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) NOT NULL,
-  candidate_id uuid REFERENCES candidates(id),
   name text NOT NULL,
-  email text NOT NULL,
-  phone text DEFAULT '',
-  position text NOT NULL,
+  role text NOT NULL,
   department text DEFAULT '',
-  employee_id text UNIQUE,
-  joining_date date DEFAULT CURRENT_DATE,
-  salary numeric DEFAULT 0,
-  onboarding_status text DEFAULT 'pending',
+  experience_years integer DEFAULT 0,
+  tasks_assigned integer DEFAULT 0,
+  tasks_completed integer DEFAULT 0,
+  on_time_submissions integer DEFAULT 0,
+  avg_task_time numeric DEFAULT 0,
+  attendance_percentage numeric DEFAULT 0,
+  communication_score integer DEFAULT 0,
+  teamwork_score integer DEFAULT 0,
+  problem_solving_score integer DEFAULT 0,
+  learning_speed integer DEFAULT 0,
+  initiative_score integer DEFAULT 0,
   performance_score integer DEFAULT 0,
-  avatar_url text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -316,12 +307,14 @@ CREATE POLICY "Users can delete own settings"
 
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
-CREATE INDEX IF NOT EXISTS idx_candidates_job_id ON candidates(job_id);
-CREATE INDEX IF NOT EXISTS idx_candidates_user_id ON candidates(user_id);
-CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status);
-CREATE INDEX IF NOT EXISTS idx_interviews_candidate_id ON interviews(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_applicants_email ON applicants(email);
+CREATE INDEX IF NOT EXISTS idx_applicants_created_at ON applicants(created_at);
+CREATE INDEX IF NOT EXISTS idx_interviews_applicant_id ON interviews(applicant_id);
 CREATE INDEX IF NOT EXISTS idx_interviews_user_id ON interviews(user_id);
 CREATE INDEX IF NOT EXISTS idx_employees_user_id ON employees(user_id);
+CREATE INDEX IF NOT EXISTS idx_employees_performance_score ON employees(performance_score);
 CREATE INDEX IF NOT EXISTS idx_attendance_employee_id ON attendance(employee_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
 CREATE INDEX IF NOT EXISTS idx_payroll_employee_id ON payroll(employee_id);
+
+

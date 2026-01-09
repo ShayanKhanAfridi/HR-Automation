@@ -1,59 +1,79 @@
-import { useEffect, useState } from 'react';
-import { Users, Filter } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Users, Mail, Phone, FileText, MessageSquare, Award, AlertTriangle, Sparkles } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Modal } from '../../components/ui/Modal';
 import { supabase } from '../../lib/supabase';
-import { Candidate } from '../../types';
+import { ResumeScreeningResult } from '../../types';
 
 export const Candidates = () => {
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [filteredCandidates, setFilteredCandidates] = useState<Candidate[]>([]);
+  const [screeningResults, setScreeningResults] = useState<ResumeScreeningResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchCandidates();
+    fetchCandidatesData();
   }, []);
 
-  useEffect(() => {
-    if (selectedStatus === 'all') {
-      setFilteredCandidates(candidates);
-    } else {
-      setFilteredCandidates(candidates.filter(c => c.status === selectedStatus));
-    }
-  }, [selectedStatus, candidates]);
+  const fetchCandidatesData = async () => {
+    try {
+      const { data, error } = await supabase.from('resume_screening_results').select('*');
 
-  const fetchCandidates = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data } = await supabase
-      .from('candidates')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    setCandidates(data || []);
-    setFilteredCandidates(data || []);
-    setLoading(false);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'applied': return 'bg-blue-100 text-blue-700';
-      case 'keep_in_view': return 'bg-orange-100 text-orange-700';
-      case 'shortlisted': return 'bg-green-100 text-green-700';
-      case 'rejected': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
+      if (error) {
+        setScreeningResults([]);
+        setErrorMessage(error.message);
+      } else {
+        const sorted = (data || []).sort((a, b) => (b.overall_score ?? 0) - (a.overall_score ?? 0));
+        setScreeningResults(sorted);
+        setErrorMessage(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch candidate data:', error);
+      setScreeningResults([]);
+      setErrorMessage('Unable to load candidates. Please try again later.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusLabel = (status: string) => {
-    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  const getDecisionBadge = (decision?: string | null) => {
+    switch ((decision || '').toLowerCase()) {
+      case 'shortlisted':
+        return 'bg-green-100 text-green-700';
+      case 'kiv':
+        return 'bg-yellow-100 text-yellow-700';
+      case 'rejected':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
   };
+
+  const formatDecisionLabel = (decision?: string | null) => {
+    if (!decision) return 'Pending Review';
+    return decision.charAt(0).toUpperCase() + decision.slice(1).toLowerCase();
+  };
+
+  const decisionStats = useMemo(() => {
+    return screeningResults.reduce(
+      (acc, result) => {
+        const key = (result.decision || 'pending').toLowerCase() as 'shortlisted' | 'kiv' | 'rejected' | 'pending';
+        if (key in acc) {
+          acc[key as keyof typeof acc] += 1;
+        } else {
+          acc.pending += 1;
+        }
+        return acc;
+      },
+      { shortlisted: 0, kiv: 0, rejected: 0, pending: 0 }
+    );
+  }, [screeningResults]);
+
+  const averageScore = useMemo(() => {
+    if (screeningResults.length === 0) {
+      return 0;
+    }
+    const total = screeningResults.reduce((sum, result) => sum + (result.overall_score ?? 0), 0);
+    return Math.round(total / screeningResults.length);
+  }, [screeningResults]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
@@ -64,120 +84,153 @@ export const Candidates = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Candidates</h1>
-          <p className="text-gray-600">Manage and review your candidate pipeline</p>
+          <p className="text-gray-600">AI-screened applicants from the resume pipeline</p>
         </div>
       </div>
 
-      <Card padding="sm">
-        <div className="flex items-center gap-4 p-4">
-          <Filter size={20} className="text-gray-600" />
-          <div className="flex gap-2 flex-wrap">
-            {['all', 'applied', 'keep_in_view', 'shortlisted', 'rejected'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setSelectedStatus(status)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  selectedStatus === status
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {status === 'all' ? 'All' : getStatusLabel(status)}
-              </button>
-            ))}
+      {screeningResults.length > 0 && (
+        <Card>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Total Reviewed</p>
+              <p className="text-3xl font-bold text-gray-900">{screeningResults.length}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Avg. Score</p>
+              <p className="text-3xl font-bold text-blue-600">{averageScore}%</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Shortlisted</p>
+              <p className="text-3xl font-bold text-green-600">{decisionStats.shortlisted}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Pending</p>
+              <p className="text-3xl font-bold text-amber-600">{decisionStats.pending}</p>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
-      {filteredCandidates.length === 0 ? (
+      {errorMessage ? (
+        <Card>
+          <div className="text-center py-12 text-red-600">
+            {errorMessage}
+          </div>
+        </Card>
+      ) : screeningResults.length === 0 ? (
         <Card>
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No candidates found</h3>
-            <p className="text-gray-600">Candidates will appear here once they apply to your jobs</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No AI-screened candidates yet</h3>
+            <p className="text-gray-600">Upload resumes to populate this list.</p>
           </div>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {filteredCandidates.map((candidate) => (
+          {screeningResults.map((candidate) => (
             <Card key={candidate.id} padding="md" hover>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full flex items-center justify-center text-white font-medium">
-                      {candidate.name.charAt(0)}
+                      {(candidate.full_name || 'N/A').charAt(0)}
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{candidate.name}</h3>
-                      <p className="text-sm text-gray-600">{candidate.email}</p>
+                      <h3 className="text-lg font-semibold text-gray-900">{candidate.full_name || 'Unnamed Applicant'}</h3>
+                      <div className="flex flex-col text-sm text-gray-600">
+                        {candidate.email && (
+                          <span className="flex items-center gap-2">
+                            <Mail size={14} /> {candidate.email}
+                          </span>
+                        )}
+                        {candidate.phone_number && (
+                          <span className="flex items-center gap-2">
+                            <Phone size={14} /> {candidate.phone_number}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 mt-2">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(candidate.status)}`}>
-                      {getStatusLabel(candidate.status)}
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getDecisionBadge(candidate.decision)}`}>
+                      {formatDecisionLabel(candidate.decision)}
                     </span>
-                    {candidate.score > 0 && (
-                      <span className="text-sm text-gray-600">Score: {candidate.score}/100</span>
+                    {candidate.status && (
+                      <span className="text-xs uppercase tracking-wide text-gray-500">{candidate.status}</span>
                     )}
                   </div>
                 </div>
-                <Button size="sm" onClick={() => {
-                  setSelectedCandidate(candidate);
-                  setShowDetailsModal(true);
-                }}>
-                  View Details
-                </Button>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-gray-700">
+                  <div className="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-2">
+                    <Award size={16} className="text-blue-500" />
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Overall Score</p>
+                      <p className="text-base font-semibold text-gray-900">{candidate.overall_score ?? 0}%</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-green-50 rounded-lg px-3 py-2">
+                    <FileText size={16} className="text-green-500" />
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Skills</p>
+                      <p className="text-base font-semibold text-gray-900">{candidate.skills_score ?? 0}%</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-amber-50 rounded-lg px-3 py-2">
+                    <AlertTriangle size={16} className="text-amber-500" />
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Experience</p>
+                      <p className="text-base font-semibold text-gray-900">{candidate.experience_score ?? 0}%</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {candidate.applicant_skill && (
+                    <div className="flex items-start gap-2 text-sm text-gray-700">
+                      <Sparkles size={16} className="text-blue-500 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-gray-900">Highlighted Skills</p>
+                        <p>{candidate.applicant_skill}</p>
+                      </div>
+                    </div>
+                  )}
+                  {candidate.reason_summary && (
+                    <div className="flex items-start gap-2 text-sm text-gray-700">
+                      <MessageSquare size={16} className="text-purple-500 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-gray-900">AI Verdict</p>
+                        <p>{candidate.reason_summary}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {(candidate.resume_drive_url || candidate.resume_drive_file_id) && (
+                  <div className="flex items-center gap-4 text-sm">
+                    {candidate.resume_drive_url && (
+                      <a
+                        href={candidate.resume_drive_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-blue-600 font-medium"
+                      >
+                        <FileText size={16} />
+                        View Resume
+                      </a>
+                    )}
+                    {candidate.resume_drive_file_id && (
+                      <span className="text-gray-500 text-xs">
+                        Drive File ID: {candidate.resume_drive_file_id}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </Card>
           ))}
         </div>
       )}
-
-      <Modal
-        isOpen={showDetailsModal}
-        onClose={() => setShowDetailsModal(false)}
-        title="Candidate Details"
-        size="lg"
-      >
-        {selectedCandidate && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4 pb-4 border-b">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full flex items-center justify-center text-white text-2xl font-medium">
-                {selectedCandidate.name.charAt(0)}
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">{selectedCandidate.name}</h3>
-                <p className="text-gray-600">{selectedCandidate.email}</p>
-                {selectedCandidate.phone && <p className="text-gray-600">{selectedCandidate.phone}</p>}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedCandidate.status)}`}>
-                {getStatusLabel(selectedCandidate.status)}
-              </span>
-            </div>
-            {selectedCandidate.score > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">AI Screening Score</label>
-                <p className="text-2xl font-bold text-blue-600">{selectedCandidate.score}/100</p>
-              </div>
-            )}
-            {selectedCandidate.ai_screening_notes && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">AI Screening Notes</label>
-                <p className="text-gray-600">{selectedCandidate.ai_screening_notes}</p>
-              </div>
-            )}
-            {selectedCandidate.cover_letter && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cover Letter</label>
-                <p className="text-gray-600">{selectedCandidate.cover_letter}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
     </div>
   );
 };

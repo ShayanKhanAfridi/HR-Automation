@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -37,15 +38,27 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center p-4">
+    <div className="relative min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        className="absolute left-6 top-6 inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to homepage
+      </button>
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-2 mb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          >
             <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
               <Sparkles className="w-7 h-7 text-white" />
             </div>
             <span className="text-2xl font-bold text-gray-900">HireAI</span>
-          </div>
+          </button>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h1>
           <p className="text-gray-600">Sign in to your account to continue</p>
         </div>

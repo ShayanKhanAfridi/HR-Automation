@@ -15,10 +15,8 @@ export const JobPostings = () => {
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [department, setDepartment] = useState('');
-  const [location, setLocation] = useState('');
-  const [employmentType, setEmploymentType] = useState('full-time');
-  const [salaryRange, setSalaryRange] = useState('');
+  const [postToLinkedIn, setPostToLinkedIn] = useState(false);
+  const [postToInstagram, setPostToInstagram] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -43,15 +41,18 @@ export const JobPostings = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    if (!title.trim()) {
+      showToast('Please enter a job title', 'error');
+      return;
+    }
+
     const { error } = await supabase.from('jobs').insert({
       user_id: user.id,
       title,
       description,
-      department,
-      location,
-      employment_type: employmentType,
-      salary_range: salaryRange,
-      status: 'active',
+      banner_image_url: null,
+      posted_to_linkedin: postToLinkedIn,
+      posted_to_instagram: postToInstagram,
     });
 
     if (error) {
@@ -64,7 +65,7 @@ export const JobPostings = () => {
     }
   };
 
-  const handlePostToSocial = async (jobId: string, platform: 'linkedin' | 'instagram') => {
+  const handlePostToSocial = async (platform: 'linkedin' | 'instagram') => {
     showToast(`Posting to ${platform}...`, 'info');
     setTimeout(() => {
       showToast(`Job posted to ${platform} successfully!`, 'success');
@@ -74,11 +75,9 @@ export const JobPostings = () => {
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setDepartment('');
-    setLocation('');
-    setEmploymentType('full-time');
-    setSalaryRange('');
     setBannerFile(null);
+    setPostToLinkedIn(false);
+    setPostToInstagram(false);
   };
 
   if (loading) {
@@ -114,25 +113,12 @@ export const JobPostings = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">{job.title}</h3>
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
-                    <span>{job.department}</span>
-                    <span>•</span>
-                    <span>{job.location}</span>
-                    <span>•</span>
-                    <span className="capitalize">{job.employment_type.replace('_', ' ')}</span>
-                    {job.salary_range && (
-                      <>
-                        <span>•</span>
-                        <span>{job.salary_range}</span>
-                      </>
-                    )}
-                  </div>
                   <p className="text-gray-600 mb-4">{job.description}</p>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
                       variant={job.posted_to_linkedin ? 'secondary' : 'outline'}
-                      onClick={() => handlePostToSocial(job.id, 'linkedin')}
+                      onClick={() => handlePostToSocial('linkedin')}
                       disabled={job.posted_to_linkedin}
                     >
                       {job.posted_to_linkedin && <Check size={16} className="mr-1" />}
@@ -141,7 +127,7 @@ export const JobPostings = () => {
                     <Button
                       size="sm"
                       variant={job.posted_to_instagram ? 'secondary' : 'outline'}
-                      onClick={() => handlePostToSocial(job.id, 'instagram')}
+                      onClick={() => handlePostToSocial('instagram')}
                       disabled={job.posted_to_instagram}
                     >
                       {job.posted_to_instagram && <Check size={16} className="mr-1" />}
@@ -149,11 +135,6 @@ export const JobPostings = () => {
                     </Button>
                   </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  job.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                }`}>
-                  {job.status}
-                </span>
               </div>
             </Card>
           ))}
@@ -162,36 +143,63 @@ export const JobPostings = () => {
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Job Posting" size="lg">
         <div className="space-y-4">
-          <Input label="Job Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Software Engineer" required />
+          <Input 
+            label="Job Title" 
+            value={title} 
+            onChange={(e) => setTitle(e.target.value)} 
+            placeholder="e.g. Senior Software Engineer" 
+            required 
+          />
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Job Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              rows={4}
-              placeholder="Job description..."
+              rows={6}
+              placeholder="Enter job description, requirements, responsibilities..."
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Department" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Engineering" />
-            <Input label="Location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Remote" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Employment Type</label>
-              <select
-                value={employmentType}
-                onChange={(e) => setEmploymentType(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="full-time">Full Time</option>
-                <option value="part-time">Part Time</option>
-                <option value="contract">Contract</option>
-                <option value="internship">Internship</option>
-              </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Banner Image</label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors">
+                <Upload size={20} />
+                <span>Upload Banner</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setBannerFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+              </label>
+              {bannerFile && (
+                <span className="text-sm text-gray-600">{bannerFile.name}</span>
+              )}
             </div>
-            <Input label="Salary Range" value={salaryRange} onChange={(e) => setSalaryRange(e.target.value)} placeholder="e.g. $80k - $120k" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Post to Social Media</label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={postToLinkedIn}
+                  onChange={(e) => setPostToLinkedIn(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Post to LinkedIn</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={postToInstagram}
+                  onChange={(e) => setPostToInstagram(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Post to Instagram</span>
+              </label>
+            </div>
           </div>
           <Button onClick={handleCreateJob} className="w-full">Create Job Posting</Button>
         </div>

@@ -3,7 +3,7 @@ import { Briefcase, Users, Bot, UserCheck } from 'lucide-react';
 import { StatsCard } from '../../components/ui/StatsCard';
 import { Card } from '../../components/ui/Card';
 import { supabase } from '../../lib/supabase';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export const DashboardOverview = () => {
   const [stats, setStats] = useState({
@@ -13,7 +13,8 @@ export const DashboardOverview = () => {
     totalEmployees: 0,
   });
 
-  const [candidatesByStage, setCandidatesByStage] = useState<any[]>([]);
+  const [candidatesByStage, setCandidatesByStage] = useState<{ name: string; value: number; color: string; }[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,44 +26,33 @@ export const DashboardOverview = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [jobsResult, candidatesResult, interviewsResult, employeesResult, stageResult] = await Promise.all([
+      const [jobsResult, applicantsResult, interviewsResult, employeesResult] = await Promise.all([
         supabase.from('jobs').select('id', { count: 'exact' }).eq('user_id', user.id),
-        supabase.from('candidates').select('id', { count: 'exact' }).eq('user_id', user.id),
+        supabase.from('applicants').select('id, subject').order('created_at', { ascending: false }),
         supabase.from('interviews').select('id', { count: 'exact' }).eq('user_id', user.id),
         supabase.from('employees').select('id', { count: 'exact' }).eq('user_id', user.id),
-        supabase.from('candidates').select('status').eq('user_id', user.id),
       ]);
+
+      const applicants = applicantsResult.data || [];
+      const totalApplicants = applicants.length;
+
+      const stageBuckets = [
+        { name: 'Careers Form', value: totalApplicants, color: '#3B82F6' },
+      ];
 
       setStats({
         totalJobs: jobsResult.count || 0,
-        totalCandidates: candidatesResult.count || 0,
+        totalCandidates: totalApplicants,
         totalInterviews: interviewsResult.count || 0,
         totalEmployees: employeesResult.count || 0,
       });
 
-      const stageCounts = {
-        applied: 0,
-        keep_in_view: 0,
-        shortlisted: 0,
-        rejected: 0,
-      };
-
-      stageResult.data?.forEach((candidate) => {
-        if (candidate.status in stageCounts) {
-          stageCounts[candidate.status as keyof typeof stageCounts]++;
-        }
-      });
-
-      setCandidatesByStage([
-        { name: 'Applied', value: stageCounts.applied, color: '#3B82F6' },
-        { name: 'Keep in View', value: stageCounts.keep_in_view, color: '#F59E0B' },
-        { name: 'Shortlisted', value: stageCounts.shortlisted, color: '#10B981' },
-        { name: 'Rejected', value: stageCounts.rejected, color: '#EF4444' },
-      ]);
-
-      setLoading(false);
+      setCandidatesByStage(stageBuckets);
+      setErrorMessage(null);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      setErrorMessage('Unable to load dashboard data. Please refresh or try again later.');
+    } finally {
       setLoading(false);
     }
   };
@@ -116,7 +106,11 @@ export const DashboardOverview = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Candidates by Stage</h3>
-          {candidatesByStage.some(stage => stage.value > 0) ? (
+          {errorMessage ? (
+            <div className="flex items-center justify-center h-64 text-red-500 text-center px-4">
+              {errorMessage}
+            </div>
+          ) : candidatesByStage.some(stage => stage.value > 0) ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -124,7 +118,7 @@ export const DashboardOverview = () => {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"

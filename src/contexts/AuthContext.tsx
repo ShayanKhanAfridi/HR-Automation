@@ -28,28 +28,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        await ensureProfileRecord(currentUser);
+      }
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        await ensureProfileRecord(currentUser);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
         },
+        emailRedirectTo: `${window.location.origin}/dashboard`,
       },
     });
+    
+    // Auto-sign in after signup (works if email confirmation is disabled)
+    if (!error && data.user && !data.session) {
+      // If no session, it means email confirmation is required
+      // User must check their email
+      return { error: { message: 'Please check your email to confirm your account' } };
+    }
+    
     return { error };
   };
 
@@ -61,18 +78,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
+  const ensureProfileRecord = (supabaseUser: SupabaseUser) => {
+    // Non-blocking profile creation - run asynchronously without blocking auth flow
+    const metadata = supabaseUser.user_metadata || {};
+    (async () => {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .upsert(
+            {
+              id: supabaseUser.id,
+              email: supabaseUser.email,
+              full_name: metadata.full_name || metadata.name || '',
+              avatar_url: metadata.avatar_url || metadata.picture || '',
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'id' }
+          );
+
+        if (error) {
+          console.warn('Profile upsert skipped:', error.message);
+        }
+      } catch (err) {
+        // Silently ignore if profiles table doesn't exist
+        console.warn('Profile upsert skipped:', err);
+      }
+    })();
+  };
+
   const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/dashboard`,
       },
     });
+
+    if (!error && data?.url) {
+      window.location.href = data.url;
+    }
+
     return { error };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Sign out error:', error);
+      // Force redirect even on error
+      window.location.href = '/login';
+    }
   };
 
   const resetPassword = async (email: string) => {

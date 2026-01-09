@@ -13,7 +13,7 @@ interface AttendanceWithEmployee {
   status: string;
   employee: {
     name: string;
-    position: string;
+    role: string;
   };
 }
 
@@ -28,34 +28,51 @@ export const Attendance = () => {
   }, [selectedDate]);
 
   const fetchAttendance = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-    const { data: attendanceData } = await supabase
-      .from('attendance')
-      .select('id, date, check_in, check_out, status, employee_id')
-      .eq('user_id', user.id)
-      .eq('date', selectedDate)
-      .order('check_in', { ascending: false });
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .select('id, date, check_in, check_out, status, employee_id')
+        .eq('user_id', user.id)
+        .eq('date', selectedDate)
+        .order('check_in', { ascending: false });
 
-    if (attendanceData) {
-      const recordsWithEmployees = await Promise.all(
-        attendanceData.map(async (record) => {
-          const { data: employee } = await supabase
-            .from('employees')
-            .select('name, position')
-            .eq('id', record.employee_id)
-            .single();
+      if (attendanceError) {
+        console.error('Attendance fetch error:', attendanceError);
+        showToast('Unable to load attendance records.', 'error');
+        setAttendanceRecords([]);
+        return;
+      }
 
-          return {
-            ...record,
-            employee: employee || { name: 'Unknown', position: '' },
-          };
-        })
-      );
-      setAttendanceRecords(recordsWithEmployees);
+      if (attendanceData) {
+        const recordsWithEmployees = await Promise.all(
+          attendanceData.map(async (record) => {
+            const { data: employee } = await supabase
+              .from('employees')
+              .select('name, role')
+              .eq('id', record.employee_id)
+              .single();
+
+            return {
+              ...record,
+              employee: employee || { name: 'Unknown', role: '' },
+            };
+          })
+        );
+        setAttendanceRecords(recordsWithEmployees);
+      }
+    } catch (error) {
+      console.error('Error loading attendance:', error);
+      showToast('Something went wrong while loading attendance.', 'error');
+      setAttendanceRecords([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleExport = () => {
@@ -125,7 +142,7 @@ export const Attendance = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -138,7 +155,7 @@ export const Attendance = () => {
                       <div className="font-medium text-gray-900">{record.employee.name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {record.employee.position}
+                      {record.employee.role || '—'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatTime(record.check_in)}

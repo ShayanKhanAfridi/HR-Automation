@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Modal } from '../components/ui/Modal';
 
 export const Register = () => {
   const navigate = useNavigate();
@@ -15,9 +14,7 @@ export const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const validatePassword = (password: string) => {
     if (password.length < 8) return 'Password must be at least 8 characters';
@@ -29,11 +26,6 @@ export const Register = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!acceptedTerms) {
-      showToast('You must accept the Terms and Conditions', 'error');
-      return;
-    }
 
     if (password !== confirmPassword) {
       showToast('Passwords do not match', 'error');
@@ -60,10 +52,6 @@ export const Register = () => {
   };
 
   const handleGoogleSignUp = async () => {
-    if (!acceptedTerms) {
-      showToast('You must accept the Terms and Conditions', 'error');
-      return;
-    }
     const { error } = await signInWithGoogle();
     if (error) {
       showToast(error.message, 'error');
@@ -71,15 +59,27 @@ export const Register = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center p-4">
+    <div className="relative min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        className="absolute left-6 top-6 inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to homepage
+      </button>
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-2 mb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          >
             <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
               <Sparkles className="w-7 h-7 text-white" />
             </div>
             <span className="text-2xl font-bold text-gray-900">HireAI</span>
-          </div>
+          </button>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create your account</h1>
           <p className="text-gray-600">Start automating your HR processes today</p>
         </div>
@@ -122,27 +122,6 @@ export const Register = () => {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
             />
-
-            <div className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                id="terms"
-                checked={acceptedTerms}
-                onChange={(e) => setAcceptedTerms(e.target.checked)}
-                className="mt-1 rounded border-gray-300"
-                required
-              />
-              <label htmlFor="terms" className="text-sm text-gray-600">
-                I agree to the{' '}
-                <button
-                  type="button"
-                  onClick={() => setShowTermsModal(true)}
-                  className="text-blue-600 hover:text-blue-700 underline"
-                >
-                  Terms and Conditions
-                </button>
-              </label>
-            </div>
 
             <Button type="submit" className="w-full" isLoading={isLoading}>
               Create Account
@@ -195,65 +174,6 @@ export const Register = () => {
           </p>
         </div>
       </div>
-
-      <Modal
-        isOpen={showTermsModal}
-        onClose={() => setShowTermsModal(false)}
-        title="Terms and Conditions"
-        size="lg"
-      >
-        <div className="prose prose-sm max-h-96 overflow-y-auto">
-          <h3>1. Acceptance of Terms</h3>
-          <p>
-            By accessing and using HireAI, you accept and agree to be bound by the terms and provision of this agreement.
-          </p>
-
-          <h3>2. Use License</h3>
-          <p>
-            Permission is granted to temporarily use HireAI for personal or commercial purposes. This is the grant of a license, not a transfer of title.
-          </p>
-
-          <h3>3. User Account</h3>
-          <p>
-            You are responsible for safeguarding your account credentials and for all activities that occur under your account. You must notify us immediately of any unauthorized use of your account.
-          </p>
-
-          <h3>4. Data Privacy</h3>
-          <p>
-            We take data privacy seriously. All candidate and employee data is encrypted and stored securely. We comply with GDPR, SOC 2, and other relevant data protection regulations.
-          </p>
-
-          <h3>5. AI Services</h3>
-          <p>
-            Our AI-powered features are provided as-is. While we strive for accuracy, AI recommendations should be reviewed by qualified HR professionals before making final decisions.
-          </p>
-
-          <h3>6. Payment Terms</h3>
-          <p>
-            Subscription fees are billed in advance on a monthly or annual basis. You can cancel your subscription at any time, but fees are non-refundable.
-          </p>
-
-          <h3>7. Termination</h3>
-          <p>
-            We may terminate or suspend your account immediately, without prior notice, if you breach these Terms.
-          </p>
-
-          <h3>8. Limitation of Liability</h3>
-          <p>
-            HireAI shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of the service.
-          </p>
-
-          <h3>9. Changes to Terms</h3>
-          <p>
-            We reserve the right to modify these terms at any time. Continued use of the service after changes constitutes acceptance of the new terms.
-          </p>
-
-          <h3>10. Contact</h3>
-          <p>
-            For questions about these Terms, please contact us at legal@hireai.com
-          </p>
-        </div>
-      </Modal>
     </div>
   );
 };
