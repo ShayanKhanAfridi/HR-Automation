@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Mail, Phone, FileText, MessageSquare, Award, AlertTriangle, Sparkles } from 'lucide-react';
+import { Users, Mail, Phone, FileText, MessageSquare, Award, AlertTriangle, Sparkles, RefreshCw, Play } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { useToast } from '../../components/ui/Toast';
 import { supabase } from '../../lib/supabase';
 import { ResumeScreeningResult } from '../../types';
 
@@ -8,12 +10,26 @@ export const Candidates = () => {
   const [screeningResults, setScreeningResults] = useState<ResumeScreeningResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activatingWorkflow, setActivatingWorkflow] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     fetchCandidatesData();
   }, []);
 
-  const fetchCandidatesData = async () => {
+  const fetchCandidatesData = async (options?: { background?: boolean; skipRefreshState?: boolean }) => {
+    const background = options?.background;
+    const skipRefreshState = options?.skipRefreshState;
+
+    if (background) {
+      if (!skipRefreshState) {
+        setIsRefreshing(true);
+      }
+    } else {
+      setLoading(true);
+    }
+
     try {
       const { data, error } = await supabase.from('resume_screening_results').select('*');
 
@@ -30,7 +46,60 @@ export const Candidates = () => {
       setScreeningResults([]);
       setErrorMessage('Unable to load candidates. Please try again later.');
     } finally {
-      setLoading(false);
+      if (background) {
+        if (!skipRefreshState) {
+          setIsRefreshing(false);
+        }
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  const postResumeScreeningWebhook = async () => {
+    const response = await fetch('https://tabby180756.app.n8n.cloud/webhook/56ecccdc-3c7f-44d6-9ce4-125aa62f8856', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message: 'resume screening activated' }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Failed to trigger resume screening');
+    }
+  };
+
+  const triggerResumeScreening = async () => {
+    if (activatingWorkflow) return;
+
+    setActivatingWorkflow(true);
+    try {
+      await postResumeScreeningWebhook();
+      showToast('Resume screening triggered successfully!', 'success');
+      fetchCandidatesData({ background: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to trigger resume screening';
+      showToast(message, 'error');
+    } finally {
+      setActivatingWorkflow(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+
+    setIsRefreshing(true);
+    try {
+      await postResumeScreeningWebhook();
+      showToast('Resume screening refreshed successfully!', 'success');
+      await fetchCandidatesData({ background: true, skipRefreshState: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to refresh candidates';
+      showToast(message, 'error');
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -85,6 +154,28 @@ export const Candidates = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Candidates</h1>
           <p className="text-gray-600">AI-screened applicants from the resume pipeline</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={triggerResumeScreening}
+            disabled={activatingWorkflow}
+            className="gap-2"
+          >
+            <Play size={16} className={activatingWorkflow ? 'animate-pulse' : ''} />
+            {activatingWorkflow ? 'Activating...' : 'Resume Screening'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="gap-2"
+          >
+            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+            {isRefreshing ? 'Refreshing' : 'Refresh'}
+          </Button>
         </div>
       </div>
 

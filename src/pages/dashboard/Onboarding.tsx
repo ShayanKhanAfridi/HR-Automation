@@ -64,7 +64,7 @@ export const Onboarding = () => {
             <TrendingUp className="w-8 h-8 text-green-600 mx-auto mb-2" />
             <p className="text-sm text-gray-600 mb-1">Onboarding Complete</p>
             <p className="text-3xl font-bold text-gray-900">
-              {employees.filter(e => e.onboarding_status === 'completed').length}
+              {employees.filter(e => (e.onboarding_status ?? 'pending') === 'completed').length}
             </p>
           </div>
         </Card>
@@ -108,7 +108,9 @@ export const Onboarding = () => {
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-900">{employee.name}</h4>
-                    <p className="text-sm text-gray-600">{employee.position} • {employee.department}</p>
+                    <p className="text-sm text-gray-600">
+                      {(employee.position || 'Role TBD')} • {employee.department || 'N/A'}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -116,9 +118,14 @@ export const Onboarding = () => {
                     <p className="text-sm text-gray-600">Performance</p>
                     <p className="text-lg font-semibold text-blue-600">{employee.performance_score}/100</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(employee.onboarding_status)}`}>
-                    {employee.onboarding_status.replace('_', ' ')}
-                  </span>
+                  {(() => {
+                    const status = employee.onboarding_status ?? 'pending';
+                    return (
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(status)}`}>
+                        {status.replace('_', ' ')}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             ))}

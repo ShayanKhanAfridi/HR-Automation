@@ -11,10 +11,7 @@ export interface Job {
   id: string;
   user_id: string;
   title: string;
-  description: string;
   banner_image_url: string | null;
-  posted_to_linkedin: boolean;
-  posted_to_instagram: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +91,9 @@ export interface Employee {
   performance_score: number;
   created_at: string;
   updated_at: string;
+  position?: string | null;
+  onboarding_status?: 'completed' | 'in_progress' | 'pending' | 'not_started' | string | null;
+  joining_date?: string | null;
 }
 
 export interface Attendance {
